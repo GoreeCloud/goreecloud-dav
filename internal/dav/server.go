@@ -164,12 +164,25 @@ func (s *Server) handlePropfind(w http.ResponseWriter, r *http.Request, principa
 		return
 	}
 
+	body := http.MaxBytesReader(w, r.Body, reportBodyLimit)
+	data, err := io.ReadAll(body)
+	if err != nil {
+		status := propfindBodyReadError(err)
+		http.Error(w, "invalid PROPFIND body", status)
+		return
+	}
+	request, err := parsePropfind(data)
+	if err != nil {
+		http.Error(w, "unsupported or malformed PROPFIND body", http.StatusBadRequest)
+		return
+	}
+
 	responses, err := s.propertyResponses(principal, target, depth == "1")
 	if err != nil {
 		writeStorageError(w, err)
 		return
 	}
-	writeMultiStatus(w, responses)
+	writePropfindMultiStatus(w, responses, request)
 }
 
 func (s *Server) handleMkCalendar(w http.ResponseWriter, principal auth.Principal, target davTarget) {

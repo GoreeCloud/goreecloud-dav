@@ -92,7 +92,7 @@ func TestDAVCalendarLifecycle(t *testing.T) {
 		t.Fatalf("PROPFIND status=%d body=%s", resp.StatusCode, propBody)
 	}
 
-	report := `<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"/></C:comp-filter></C:filter></C:calendar-query>`
+	report := `<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:prop><C:calendar-data/></D:prop><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"/></C:comp-filter></C:filter></C:calendar-query>`
 	resp = request(t, client, "REPORT", ts.URL+"/dav/calendars/alice/personal/", report, map[string]string{"Depth": "1"})
 	reportBody, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()

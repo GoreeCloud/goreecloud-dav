@@ -312,6 +312,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 			return
 		}
 		responses := make([]propertyResponse, 0, len(hrefs))
+		seen := make(map[string]struct{}, len(hrefs))
 		base := target.href()
 		for _, href := range hrefs {
 			name, err := reportHrefResourceName(href, target)
@@ -319,6 +320,10 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 				http.Error(w, "multiget DAV:href is outside the requested collection", http.StatusBadRequest)
 				return
 			}
+			if _, duplicate := seen[name]; duplicate {
+				continue
+			}
+			seen[name] = struct{}{}
 			resource, err := s.store.GetResource(principal.ID, target.kind, target.collection, name)
 			switch {
 			case errors.Is(err, storage.ErrNotFound):

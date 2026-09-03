@@ -10,7 +10,10 @@ import (
 	"github.com/GoreeCloud/goreecloud-dav/internal/storage"
 )
 
-var errUnsupportedReportFilter = errors.New("unsupported report filter")
+var (
+	errUnsupportedReportFilter = errors.New("unsupported report filter")
+	errUnsupportedReportDepth  = errors.New("unsupported report depth")
+)
 
 type reportRequest struct {
 	Name              string
@@ -229,6 +232,33 @@ func reportAttr(node *reportXMLNode, namespace, local string) string {
 		}
 	}
 	return ""
+}
+
+func reportQueryIncludesMembers(req reportRequest, rawDepth string) (bool, error) {
+	depth := strings.TrimSpace(rawDepth)
+	switch req.Name {
+	case "calendar-query":
+		if depth == "" {
+			depth = "0"
+		}
+	case "addressbook-query":
+		if depth == "" {
+			return false, fmt.Errorf("addressbook-query requires Depth header")
+		}
+	default:
+		return true, nil
+	}
+
+	switch depth {
+	case "0":
+		return false, nil
+	case "1":
+		return true, nil
+	case "infinity":
+		return false, fmt.Errorf("%w: infinite-depth query REPORT is not implemented", errUnsupportedReportDepth)
+	default:
+		return false, fmt.Errorf("invalid query REPORT Depth header")
+	}
 }
 
 func reportQueryMatches(req reportRequest, resource storage.Resource) bool {

@@ -56,6 +56,7 @@ func parsePropfind(data []byte) (propfindRequest, error) {
 				root = t.Name
 				if root.Space != nsDAV || root.Local != "propfind" {
 					return propfindRequest{}, fmt.Errorf("PROPFIND body root must be DAV:propfind")
+				}
 				depth++
 				continue
 			}
@@ -118,6 +119,20 @@ func deduplicatePropertyNames(names []xml.Name) []xml.Name {
 		out = append(out, name)
 	}
 	return out
+}
+
+func writePropfindFiniteDepthError(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", `application/xml; charset="utf-8"`)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusForbidden)
+
+	enc := xml.NewEncoder(w)
+	_ = enc.EncodeToken(xml.ProcInst{Target: "xml", Inst: []byte(`version="1.0" encoding="UTF-8"`)})
+	root := xml.StartElement{Name: xml.Name{Space: nsDAV, Local: "error"}}
+	_ = enc.EncodeToken(root)
+	encodeEmpty(enc, nsDAV, "propfind-finite-depth")
+	_ = enc.EncodeToken(root.End())
+	_ = enc.Flush()
 }
 
 func writePropfindMultiStatus(w http.ResponseWriter, responses []propertyResponse, request propfindRequest) {

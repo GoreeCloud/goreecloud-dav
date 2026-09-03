@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 
 	"github.com/GoreeCloud/goreecloud-dav/internal/auth"
@@ -306,24 +305,33 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 		return
 	}
 
+	isMultiget := strings.HasSuffix(reportName, "-multiget")
+	filter := make(map[string]struct{}, len(hrefs))
+	if isMultiget {
+		if len(hrefs) == 0 {
+			http.Error(w, "multiget REPORT requires at least one DAV:href", http.StatusBadRequest)
+			return
+		}
+		for _, href := range hrefs {
+			name, err := reportHrefResourceName(href, target)
+			if err != nil {
+				http.Error(w, "multiget DAV:href is outside the requested collection", http.StatusBadRequest)
+				return
+			}
+			filter[name] = struct{}{}
+		}
+	}
+
 	resources, err := s.store.ListResources(principal.ID, target.kind, target.collection)
 	if err != nil {
 		writeStorageError(w, err)
 		return
 	}
 
-	filter := make(map[string]struct{}, len(hrefs))
-	for _, href := range hrefs {
-		name := path.Base(href)
-		if name != "." && name != "/" && name != "" {
-			filter[name] = struct{}{}
-		}
-	}
-
 	responses := make([]propertyResponse, 0, len(resources))
 	base := target.href()
 	for _, resource := range resources {
-		if strings.HasSuffix(reportName, "multiget") && len(filter) > 0 {
+		if isMultiget {
 			if _, ok := filter[resource.Name]; !ok {
 				continue
 			}
@@ -418,7 +426,7 @@ func propertyResponseFor(target davTarget, principalID string) propertyResponse 
 
 func parseReport(data []byte) (string, []string, error) {
 	decoder := xml.NewDecoder(strings.NewReader(string(data)))
-	var root string
+	var root xml.Name
 	var hrefs []string
 	for {
 		token, err := decoder.Token()
@@ -430,11 +438,11 @@ func parseReport(data []byte) (string, []string, error) {
 		}
 		switch t := token.(type) {
 		case xml.StartElement:
-			if root == "" {
-				root = t.Name.Local
+			if root.Local == "" {
+				root = t.Name
 				continue
 			}
-			if t.Name.Local == "href" {
+			if t.Name.Space == nsDAV && t.Name.Local == "href" {
 				var href string
 				if err := decoder.DecodeElement(&href, &t); err != nil {
 					return "", nil, err
@@ -443,12 +451,20 @@ func parseReport(data []byte) (string, []string, error) {
 			}
 		}
 	}
-	switch root {
-	case "calendar-query", "calendar-multiget", "addressbook-query", "addressbook-multiget":
-		return root, hrefs, nil
+
+	switch root.Local {
+	case "calendar-query", "calendar-multiget":
+		if root.Space != nsCalDAV {
+			return "", nil, fmt.Errorf("calendar REPORT has unexpected namespace %q", root.Space)
+		}
+	case "addressbook-query", "addressbook-multiget":
+		if root.Space != nsCardDAV {
+			return "", nil, fmt.Errorf("address-book REPORT has unexpected namespace %q", root.Space)
+		}
 	default:
-		return "", nil, fmt.Errorf("unsupported report %q", root)
+		return "", nil, fmt.Errorf("unsupported report %q", root.Local)
 	}
+	return root.Local, hrefs, nil
 }
 
 func reportAllowed(name string, kind storage.Kind) bool {
@@ -456,6 +472,21 @@ func reportAllowed(name string, kind storage.Kind) bool {
 		return name == "calendar-query" || name == "calendar-multiget"
 	}
 	return name == "addressbook-query" || name == "addressbook-multiget"
+}
+
+func reportHrefResourceName(rawHref string, target davTarget) (string, error) {
+	href, err := url.Parse(strings.TrimSpace(rawHref))
+	if err != nil || href.Path == "" || href.RawQuery != "" || href.Fragment != "" {
+		return "", fmt.Errorf("invalid DAV href")
+	}
+	candidate, err := parseTarget(href.Path)
+	if err != nil {
+		return "", err
+	}
+	if candidate.level() != levelResource || candidate.principal != target.principal || candidate.kind != target.kind || candidate.collection != target.collection {
+		return "", fmt.Errorf("DAV href is outside the target collection")
+	}
+	return candidate.resource, nil
 }
 
 func validateResource(kind storage.Kind, data []byte) error {

@@ -315,9 +315,9 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 		seen := make(map[string]struct{}, len(hrefs))
 		base := target.href()
 		for _, href := range hrefs {
-			name, err := reportHrefResourceName(href, target)
+			name, err := reportHrefResourceName(href, target, r.Host)
 			if err != nil {
-				http.Error(w, "multiget DAV:href is outside the requested collection", http.StatusBadRequest)
+				http.Error(w, "multiget DAV:href is outside the requested collection or authority", http.StatusBadRequest)
 				return
 			}
 			if _, duplicate := seen[name]; duplicate {
@@ -496,10 +496,20 @@ func reportAllowed(name string, kind storage.Kind) bool {
 	return name == "addressbook-query" || name == "addressbook-multiget"
 }
 
-func reportHrefResourceName(rawHref string, target davTarget) (string, error) {
+func reportHrefResourceName(rawHref string, target davTarget, requestHost string) (string, error) {
 	href, err := url.Parse(strings.TrimSpace(rawHref))
 	if err != nil || href.Path == "" || href.RawQuery != "" || href.Fragment != "" {
 		return "", fmt.Errorf("invalid DAV href")
+	}
+	if href.IsAbs() {
+		if href.Scheme != "http" && href.Scheme != "https" {
+			return "", fmt.Errorf("unsupported DAV href scheme")
+		}
+		if href.Host == "" || !strings.EqualFold(href.Host, requestHost) {
+			return "", fmt.Errorf("DAV href authority does not match request")
+		}
+	} else if href.Host != "" {
+		return "", fmt.Errorf("network-path DAV href is not supported")
 	}
 	candidate, err := parseTarget(href.Path)
 	if err != nil {

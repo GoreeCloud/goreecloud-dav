@@ -15,6 +15,7 @@ const (
 
 type propertyResponse struct {
 	Href                 string
+	Status               string
 	DisplayName          string
 	ResourceType         string
 	CurrentUserPrincipal string
@@ -46,6 +47,11 @@ func encodeResponse(enc *xml.Encoder, p propertyResponse) {
 	response := xml.StartElement{Name: xml.Name{Space: nsDAV, Local: "response"}}
 	_ = enc.EncodeToken(response)
 	encodeText(enc, nsDAV, "href", p.Href)
+	if p.Status != "" {
+		encodeText(enc, nsDAV, "status", p.Status)
+		_ = enc.EncodeToken(response.End())
+		return
+	}
 
 	propstat := xml.StartElement{Name: xml.Name{Space: nsDAV, Local: "propstat"}}
 	_ = enc.EncodeToken(propstat)

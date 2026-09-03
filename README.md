@@ -100,7 +100,7 @@ Do not commit real credentials.
 ## Validation
 
 ```sh
-./scripts/check-repository-docs.sh
+sh ./scripts/check-repository-docs.sh
 test -z "$(gofmt -l .)"
 go test ./...
 go vet ./...

@@ -2,7 +2,6 @@ package dav
 
 import (
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -317,11 +316,14 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 
 	reportReq, err := parseReportRequest(data)
 	if err != nil {
-		if errors.Is(err, errUnsupportedReportFilter) {
+		switch {
+		case errors.Is(err, errUnsupportedReportFilter):
 			http.Error(w, "REPORT filter is not implemented by this foundation", http.StatusNotImplemented)
-			return
+		case errors.Is(err, errUnsupportedReportProjection):
+			http.Error(w, "REPORT data projection is not implemented by this foundation", http.StatusNotImplemented)
+		default:
+			http.Error(w, "unsupported or malformed REPORT", http.StatusBadRequest)
 		}
-		http.Error(w, "unsupported or malformed REPORT", http.StatusBadRequest)
 		return
 	}
 	reportName := reportReq.Name
@@ -332,18 +334,15 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 
 	isMultiget := strings.HasSuffix(reportName, "-multiget")
 	isQuery := strings.HasSuffix(reportName, "-query")
+	queryIncludesMembers := true
 	if isQuery {
-		includeMembers, err := reportQueryIncludesMembers(reportReq, r.Header.Get("Depth"))
+		queryIncludesMembers, err = reportQueryIncludesMembers(reportReq, r.Header.Get("Depth"))
 		if err != nil {
 			if errors.Is(err, errUnsupportedReportDepth) {
 				http.Error(w, "infinite-depth query REPORT is not implemented", http.StatusForbidden)
 				return
 			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if !includeMembers {
-			writeMultiStatus(w, nil)
 			return
 		}
 	}
@@ -368,6 +367,10 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 	resources, err := s.store.ListResources(principal.ID, target.kind, target.collection)
 	if err != nil {
 		writeStorageError(w, err)
+		return
+	}
+	if isQuery && !queryIncludesMembers {
+		writeReportMultiStatus(w, nil, reportReq)
 		return
 	}
 
@@ -412,7 +415,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 			})
 		}
 	}
-	writeMultiStatus(w, responses)
+	writeReportMultiStatus(w, responses, reportReq)
 }
 
 func (s *Server) propertyResponses(principal auth.Principal, target davTarget, includeChildren bool) ([]propertyResponse, error) {
@@ -489,49 +492,6 @@ func propertyResponseFor(target davTarget, principalID string) propertyResponse 
 		p.AddressBookHome = "/dav/addressbooks/" + url.PathEscape(principalID) + "/"
 	}
 	return p
-}
-
-func parseReport(data []byte) (string, []string, error) {
-	decoder := xml.NewDecoder(strings.NewReader(string(data)))
-	var root xml.Name
-	var hrefs []string
-	for {
-		token, err := decoder.Token()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return "", nil, err
-		}
-		switch t := token.(type) {
-		case xml.StartElement:
-			if root.Local == "" {
-				root = t.Name
-				continue
-			}
-			if t.Name.Space == nsDAV && t.Name.Local == "href" {
-				var href string
-				if err := decoder.DecodeElement(&href, &t); err != nil {
-					return "", nil, err
-				}
-				hrefs = append(hrefs, strings.TrimSpace(href))
-			}
-		}
-	}
-
-	switch root.Local {
-	case "calendar-query", "calendar-multiget":
-		if root.Space != nsCalDAV {
-			return "", nil, fmt.Errorf("calendar REPORT has unexpected namespace %q", root.Space)
-		}
-	case "addressbook-query", "addressbook-multiget":
-		if root.Space != nsCardDAV {
-			return "", nil, fmt.Errorf("address-book REPORT has unexpected namespace %q", root.Space)
-		}
-	default:
-		return "", nil, fmt.Errorf("unsupported report %q", root.Local)
-	}
-	return root.Local, hrefs, nil
 }
 
 func reportAllowed(name string, kind storage.Kind) bool {

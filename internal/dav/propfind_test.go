@@ -103,3 +103,38 @@ func TestPropfindExplicitUnavailableLivePropertyReturns404Propstat(t *testing.T)
 		t.Fatalf("unavailable live property status=%d body=%s", resp.StatusCode, body)
 	}
 }
+
+func TestPropfindMissingDepthUsesInfinitySemanticsAndFailsFinite(t *testing.T) {
+	ts := newTestServer(t)
+	bodyXML := `<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>`
+	resp := request(t, ts.Client(), "PROPFIND", ts.URL+"/dav/", bodyXML, nil)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("missing Depth status=%d body=%s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "propfind-finite-depth") {
+		t.Fatalf("missing Depth did not return DAV finite-depth precondition: %s", body)
+	}
+}
+
+func TestPropfindInfinityReturnsFiniteDepthPrecondition(t *testing.T) {
+	ts := newTestServer(t)
+	bodyXML := `<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>`
+	resp := request(t, ts.Client(), "PROPFIND", ts.URL+"/dav/", bodyXML, map[string]string{"Depth": "infinity"})
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(body), "propfind-finite-depth") {
+		t.Fatalf("infinite Depth status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestPropfindRejectsInvalidDepthValue(t *testing.T) {
+	ts := newTestServer(t)
+	bodyXML := `<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>`
+	resp := request(t, ts.Client(), "PROPFIND", ts.URL+"/dav/", bodyXML, map[string]string{"Depth": "2"})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid Depth status=%d", resp.StatusCode)
+	}
+}

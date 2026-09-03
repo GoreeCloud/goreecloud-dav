@@ -157,10 +157,17 @@ func (s *Server) handleOptions(w http.ResponseWriter, target davTarget) {
 func (s *Server) handlePropfind(w http.ResponseWriter, r *http.Request, principal auth.Principal, target davTarget) {
 	depth := strings.TrimSpace(r.Header.Get("Depth"))
 	if depth == "" {
-		depth = "0"
+		// RFC 4918 recommends treating an omitted PROPFIND Depth header as
+		// Depth: infinity. This foundation intentionally does not support
+		// infinite-depth PROPFIND, so omission follows the same rejection path.
+		depth = "infinity"
+	}
+	if depth == "infinity" {
+		writePropfindFiniteDepthError(w)
+		return
 	}
 	if depth != "0" && depth != "1" {
-		http.Error(w, "only Depth: 0 and Depth: 1 are supported", http.StatusForbidden)
+		http.Error(w, "invalid PROPFIND Depth header", http.StatusBadRequest)
 		return
 	}
 
@@ -319,35 +326,49 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 	}
 
 	isMultiget := strings.HasSuffix(reportName, "-multiget")
+	requestedNames := make([]string, 0, len(hrefs))
+	seenNames := make(map[string]struct{}, len(hrefs))
 	if isMultiget {
 		if len(hrefs) == 0 {
 			http.Error(w, "multiget REPORT requires at least one DAV:href", http.StatusBadRequest)
 			return
 		}
-		responses := make([]propertyResponse, 0, len(hrefs))
-		seen := make(map[string]struct{}, len(hrefs))
-		base := target.href()
 		for _, href := range hrefs {
-			name, err := reportHrefResourceName(href, target, r.Host)
+			name, err := reportHrefResourceName(href, target, r)
 			if err != nil {
-				http.Error(w, "multiget DAV:href is outside the requested collection or authority", http.StatusBadRequest)
+				http.Error(w, "multiget DAV:href is outside the requested collection", http.StatusBadRequest)
 				return
 			}
-			if _, duplicate := seen[name]; duplicate {
+			if _, ok := seenNames[name]; ok {
 				continue
 			}
-			seen[name] = struct{}{}
-			resource, err := s.store.GetResource(principal.ID, target.kind, target.collection, name)
-			switch {
-			case errors.Is(err, storage.ErrNotFound):
+			seenNames[name] = struct{}{}
+			requestedNames = append(requestedNames, name)
+		}
+	}
+
+	resources, err := s.store.ListResources(principal.ID, target.kind, target.collection)
+	if err != nil {
+		writeStorageError(w, err)
+		return
+	}
+
+	base := target.href()
+	responses := make([]propertyResponse, 0, len(resources))
+	if isMultiget {
+		byName := make(map[string]storage.Resource, len(resources))
+		for _, resource := range resources {
+			byName[resource.Name] = resource
+		}
+		responses = make([]propertyResponse, 0, len(requestedNames))
+		for _, name := range requestedNames {
+			resource, ok := byName[name]
+			if !ok {
 				responses = append(responses, propertyResponse{
 					Href:   base + url.PathEscape(name),
 					Status: "HTTP/1.1 404 Not Found",
 				})
 				continue
-			case err != nil:
-				writeStorageError(w, err)
-				return
 			}
 			responses = append(responses, propertyResponse{
 				Href:         base + url.PathEscape(resource.Name),
@@ -358,27 +379,17 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 				DataKind:     target.kind,
 			})
 		}
-		writeMultiStatus(w, responses)
-		return
-	}
-
-	resources, err := s.store.ListResources(principal.ID, target.kind, target.collection)
-	if err != nil {
-		writeStorageError(w, err)
-		return
-	}
-
-	responses := make([]propertyResponse, 0, len(resources))
-	base := target.href()
-	for _, resource := range resources {
-		responses = append(responses, propertyResponse{
-			Href:         base + url.PathEscape(resource.Name),
-			ResourceType: "resource",
-			ETag:         resource.ETag,
-			ContentType:  resource.ContentType,
-			Data:         string(resource.Data),
-			DataKind:     target.kind,
-		})
+	} else {
+		for _, resource := range resources {
+			responses = append(responses, propertyResponse{
+				Href:         base + url.PathEscape(resource.Name),
+				ResourceType: "resource",
+				ETag:         resource.ETag,
+				ContentType:  resource.ContentType,
+				Data:         string(resource.Data),
+				DataKind:     target.kind,
+			})
+		}
 	}
 	writeMultiStatus(w, responses)
 }
@@ -509,20 +520,18 @@ func reportAllowed(name string, kind storage.Kind) bool {
 	return name == "addressbook-query" || name == "addressbook-multiget"
 }
 
-func reportHrefResourceName(rawHref string, target davTarget, requestHost string) (string, error) {
+func reportHrefResourceName(rawHref string, target davTarget, request *http.Request) (string, error) {
 	href, err := url.Parse(strings.TrimSpace(rawHref))
 	if err != nil || href.Path == "" || href.RawQuery != "" || href.Fragment != "" {
 		return "", fmt.Errorf("invalid DAV href")
 	}
 	if href.IsAbs() {
-		if href.Scheme != "http" && href.Scheme != "https" {
-			return "", fmt.Errorf("unsupported DAV href scheme")
+		if request == nil || !strings.EqualFold(href.Scheme, request.URL.Scheme) && request.URL.Scheme != "" {
+			return "", fmt.Errorf("absolute DAV href has unexpected scheme")
 		}
-		if href.Host == "" || !strings.EqualFold(href.Host, requestHost) {
-			return "", fmt.Errorf("DAV href authority does not match request")
+		if !strings.EqualFold(href.Host, request.Host) {
+			return "", fmt.Errorf("absolute DAV href has unexpected authority")
 		}
-	} else if href.Host != "" {
-		return "", fmt.Errorf("network-path DAV href is not supported")
 	}
 	candidate, err := parseTarget(href.Path)
 	if err != nil {

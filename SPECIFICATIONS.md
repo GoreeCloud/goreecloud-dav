@@ -36,7 +36,7 @@ The current source implements:
 4. `GET /api/v1/status` with explicit non-conformance/migration-required platform status.
 5. Development authentication provider abstraction.
 6. Loopback-only credentialless development mode and optional development HTTP Basic authentication.
-7. RFC 6764 `.well-known` CalDAV/CardDAV redirects and conservative `OPTIONS` behavior.
+7. RFC 6764 `.well-known` CalDAV/CardDAV redirects and conservative `OPTIONS` method discovery without RFC compliance tokens.
 8. `PROPFIND` Depth 0/1 for a supported baseline property set.
 9. Principal, calendar-home, and address-book-home discovery paths.
 10. `MKCALENDAR` for calendar collections.
@@ -45,23 +45,25 @@ The current source implements:
 13. `PUT` of baseline-validated `.ics` and `.vcf` resources.
 14. `DELETE` resources and empty development collections.
 15. Deterministic SHA-256 ETags.
-16. `If-Match` and `If-None-Match` write preconditions.
+16. `If-Match` and `If-None-Match` PUT preconditions.
 17. Baseline calendar/address-book query and multiget REPORTs.
-18. Filesystem persistence with atomic file publication.
-19. Restricted path segments and storage-root containment.
-20. Bounded resource and REPORT bodies.
-21. Go tests, vet/build validation, repository-document validation, and CI configuration.
+18. Multiget report namespace validation, in-scope `DAV:href` validation, and one multistatus response per requested href including 404 status responses for missing resources.
+19. Filesystem persistence with atomic file publication.
+20. Restricted path segments, storage-root containment, and fail-closed symlink-path rejection.
+21. Bounded resource and REPORT bodies.
+22. Go tests, vet/build validation, repository-document validation, and CI configuration.
 
-The implementation intentionally advertises only `DAV: 1` today. It does not emit `calendar-access` or `addressbook` compliance tokens until the relevant MUST-level requirements are implemented and interoperability-qualified.
+The foundation intentionally emits **no `DAV` compliance class/token today**. RFC 4918 class `1` is withheld because this source does not yet satisfy all applicable RFC 4918 MUST-level requirements, including `PROPPATCH`, `COPY`, `MOVE`, and complete WebDAV property behavior. The CalDAV `calendar-access` and CardDAV `addressbook` tokens are likewise withheld until their applicable requirements and interoperability qualification are complete.
 
 ## Explicit non-claims
 
 The source does not yet establish:
 
-- full WebDAV RFC 4918 conformance;
+- WebDAV RFC 4918 class-1 conformance;
 - full CalDAV RFC 4791 conformance;
 - full CardDAV RFC 6352 conformance;
-- complete WebDAV property mutation/dead-property behavior;
+- `PROPPATCH` and complete WebDAV live/dead property mutation behavior;
+- `COPY` and `MOVE` WebDAV behavior;
 - complete WebDAV ACL;
 - RFC 6578 sync-token/change-journal behavior;
 - scheduling extensions;
@@ -105,7 +107,7 @@ The current storage interface separates:
 - calendar resources;
 - contact resources.
 
-The filesystem adapter stores only validated path segments under the configured root, creates private directories, publishes resource updates atomically, and derives ETags from resource bytes.
+The filesystem adapter stores only validated path segments under the configured root, resolves the configured root before use, rejects symlinked storage path components, creates private directories, publishes resource updates atomically, and derives ETags from resource bytes.
 
 Storage is behind an interface and is replaceable.
 

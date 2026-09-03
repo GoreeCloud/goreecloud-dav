@@ -51,13 +51,15 @@ HTTP/DAV request routing and baseline protocol behavior:
 - authenticated DAV request boundary;
 - URL/principal isolation;
 - RFC 6764 well-known redirects;
-- conservative OPTIONS compliance advertising;
+- `OPTIONS` method discovery with RFC compliance tokens withheld;
 - PROPFIND;
 - MKCALENDAR/MKCOL;
 - GET/HEAD/PUT/DELETE;
-- baseline REPORT;
+- baseline query and multiget REPORT behavior;
+- report namespace and in-scope href validation;
+- per-requested-resource multiget status responses;
 - DAV multistatus XML;
-- ETag preconditions;
+- ETag PUT preconditions;
 - body limits and resource validation.
 
 ### `internal/storage`
@@ -67,10 +69,13 @@ Replaceable storage interface and filesystem adapter.
 The filesystem adapter:
 
 - restricts path segments;
-- confines paths to the configured root;
+- resolves and confines paths to the configured root;
+- rejects symlinked storage path components and symlink entries;
 - uses private directories/files;
 - uses temporary-file + fsync + rename publication;
 - derives ETags from SHA-256 of stored resource bytes.
+
+The symlink checks are defense in depth for local filesystem tampering; they do not convert the development filesystem adapter into a production authorization boundary.
 
 ## Data ownership
 
@@ -90,4 +95,4 @@ Native application adapters should eventually translate between DAV resources an
 
 ## Non-goals of the foundation
 
-The foundation intentionally does not claim complete RFC conformance, production security, production deployment, or Stable status.
+The foundation intentionally does not claim RFC 4918 class-1 conformance, CalDAV/CardDAV compliance-token qualification, production security, production deployment, or Stable status.

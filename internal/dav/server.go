@@ -315,25 +315,43 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 		return
 	}
 
-	reportName, hrefs, err := parseReport(data)
+	reportReq, err := parseReportRequest(data)
 	if err != nil {
+		if errors.Is(err, errUnsupportedReportFilter) {
+			http.Error(w, "REPORT filter is not implemented by this foundation", http.StatusNotImplemented)
+			return
+		}
 		http.Error(w, "unsupported or malformed REPORT", http.StatusBadRequest)
 		return
 	}
+	reportName := reportReq.Name
 	if !reportAllowed(reportName, target.kind) {
 		http.Error(w, "REPORT type is not valid for this collection", http.StatusForbidden)
 		return
 	}
 
 	isMultiget := strings.HasSuffix(reportName, "-multiget")
-	requestedNames := make([]string, 0, len(hrefs))
-	seenNames := make(map[string]struct{}, len(hrefs))
-	if isMultiget {
-		if len(hrefs) == 0 {
-			http.Error(w, "multiget REPORT requires at least one DAV:href", http.StatusBadRequest)
+	isQuery := strings.HasSuffix(reportName, "-query")
+	if isQuery {
+		includeMembers, err := reportQueryIncludesMembers(reportReq, r.Header.Get("Depth"))
+		if err != nil {
+			if errors.Is(err, errUnsupportedReportDepth) {
+				http.Error(w, "infinite-depth query REPORT is not implemented", http.StatusForbidden)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		for _, href := range hrefs {
+		if !includeMembers {
+			writeMultiStatus(w, nil)
+			return
+		}
+	}
+
+	requestedNames := make([]string, 0, len(reportReq.Hrefs))
+	seenNames := make(map[string]struct{}, len(reportReq.Hrefs))
+	if isMultiget {
+		for _, href := range reportReq.Hrefs {
 			name, err := reportHrefResourceName(href, target, r)
 			if err != nil {
 				http.Error(w, "multiget DAV:href is outside the requested collection", http.StatusBadRequest)
@@ -381,6 +399,9 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 		}
 	} else {
 		for _, resource := range resources {
+			if !reportQueryMatches(reportReq, resource) {
+				continue
+			}
 			responses = append(responses, propertyResponse{
 				Href:         base + url.PathEscape(resource.Name),
 				ResourceType: "resource",

@@ -47,8 +47,11 @@ func TestDAVCalendarLifecycle(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("OPTIONS status=%d", resp.StatusCode)
 	}
-	if resp.Header.Get("DAV") != "1" {
-		t.Fatalf("unexpected DAV compliance claim: %q", resp.Header.Get("DAV"))
+	if got := resp.Header.Get("DAV"); got != "" {
+		t.Fatalf("foundation must not advertise an unearned DAV compliance class: %q", got)
+	}
+	if !strings.Contains(resp.Header.Get("Allow"), "PROPFIND") {
+		t.Fatalf("OPTIONS did not expose implemented methods: %q", resp.Header.Get("Allow"))
 	}
 	resp.Body.Close()
 
@@ -152,8 +155,8 @@ func TestWellKnownRedirectAndNoFalseComplianceToken(t *testing.T) {
 	resp.Body.Close()
 
 	resp = request(t, &client, "OPTIONS", ts.URL+"/dav/", "", nil)
-	if strings.Contains(resp.Header.Get("DAV"), "calendar-access") || strings.Contains(resp.Header.Get("DAV"), "addressbook") {
-		t.Fatalf("foundation must not advertise unqualified CalDAV/CardDAV compliance: %q", resp.Header.Get("DAV"))
+	if got := resp.Header.Get("DAV"); got != "" {
+		t.Fatalf("foundation must not advertise RFC 4918/CalDAV/CardDAV compliance: %q", got)
 	}
 	resp.Body.Close()
 }

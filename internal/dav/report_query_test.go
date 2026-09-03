@@ -85,11 +85,14 @@ func TestCalendarQueryComponentExistenceFilter(t *testing.T) {
 	if resp.StatusCode != 207 {
 		t.Fatalf("calendar-query status=%d body=%s", resp.StatusCode, body)
 	}
-	if !strings.Contains(text, "event.ics") || !strings.Contains(text, "VEVENT") {
-		t.Fatalf("VEVENT query omitted matching event: %s", body)
+	if !strings.Contains(text, "event.ics") {
+		t.Fatalf("VEVENT query omitted matching event href: %s", body)
 	}
-	if strings.Contains(text, "task.ics") || strings.Contains(text, "VTODO") {
-		t.Fatalf("VEVENT query included non-matching task: %s", body)
+	if strings.Contains(text, "task.ics") {
+		t.Fatalf("VEVENT query included non-matching task href: %s", body)
+	}
+	if strings.Contains(text, "VEVENT") || strings.Contains(text, "VTODO") {
+		t.Fatalf("query without DAV property selection returned unrequested calendar data: %s", body)
 	}
 }
 
@@ -122,7 +125,7 @@ func TestCalendarQueryRejectsUnsupportedTimeRange(t *testing.T) {
 	if resp.StatusCode != http.StatusNotImplemented {
 		t.Fatalf("unsupported time-range status=%d body=%s", resp.StatusCode, body)
 	}
-	if strings.Contains(string(body), "VEVENT") || strings.Contains(string(body), "VTODO") {
+	if strings.Contains(string(body), "event.ics") || strings.Contains(string(body), "task.ics") {
 		t.Fatalf("unsupported calendar filter leaked broadened results: %s", body)
 	}
 }
@@ -163,11 +166,14 @@ func TestAddressBookQueryPropertyExistenceAndGroupedProperty(t *testing.T) {
 	if resp.StatusCode != 207 {
 		t.Fatalf("addressbook-query status=%d body=%s", resp.StatusCode, body)
 	}
-	if !strings.Contains(text, "email.vcf") || !strings.Contains(text, "person@example.test") {
+	if !strings.Contains(text, "email.vcf") {
 		t.Fatalf("EMAIL filter did not match grouped item1.EMAIL property: %s", body)
 	}
-	if strings.Contains(text, "phone.vcf") || strings.Contains(text, "+15555550100") {
+	if strings.Contains(text, "phone.vcf") {
 		t.Fatalf("EMAIL filter included contact without EMAIL property: %s", body)
+	}
+	if strings.Contains(text, "person@example.test") || strings.Contains(text, "+15555550100") {
+		t.Fatalf("query without DAV property selection returned unrequested vCard data: %s", body)
 	}
 }
 

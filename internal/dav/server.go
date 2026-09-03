@@ -146,10 +146,10 @@ func (s *Server) handleDAV(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOptions(w http.ResponseWriter, target davTarget) {
-	// Advertise only the WebDAV compliance level this foundation can currently
-	// substantiate. CalDAV/CardDAV compliance tokens are intentionally withheld
-	// until all applicable MUST-level requirements are implemented and tested.
-	w.Header().Set("DAV", "1")
+	// Do not advertise an RFC 4918, CalDAV, or CardDAV compliance token until
+	// the applicable MUST-level requirements for that token are implemented and
+	// interoperability-qualified. The Allow header still exposes implemented
+	// methods without making a stronger compliance claim.
 	w.Header().Set("Allow", allowedMethods(target))
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -306,20 +306,42 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 	}
 
 	isMultiget := strings.HasSuffix(reportName, "-multiget")
-	filter := make(map[string]struct{}, len(hrefs))
 	if isMultiget {
 		if len(hrefs) == 0 {
 			http.Error(w, "multiget REPORT requires at least one DAV:href", http.StatusBadRequest)
 			return
 		}
+		responses := make([]propertyResponse, 0, len(hrefs))
+		base := target.href()
 		for _, href := range hrefs {
 			name, err := reportHrefResourceName(href, target)
 			if err != nil {
 				http.Error(w, "multiget DAV:href is outside the requested collection", http.StatusBadRequest)
 				return
 			}
-			filter[name] = struct{}{}
+			resource, err := s.store.GetResource(principal.ID, target.kind, target.collection, name)
+			switch {
+			case errors.Is(err, storage.ErrNotFound):
+				responses = append(responses, propertyResponse{
+					Href:   base + url.PathEscape(name),
+					Status: "HTTP/1.1 404 Not Found",
+				})
+				continue
+			case err != nil:
+				writeStorageError(w, err)
+				return
+			}
+			responses = append(responses, propertyResponse{
+				Href:         base + url.PathEscape(resource.Name),
+				ResourceType: "resource",
+				ETag:         resource.ETag,
+				ContentType:  resource.ContentType,
+				Data:         string(resource.Data),
+				DataKind:     target.kind,
+			})
 		}
+		writeMultiStatus(w, responses)
+		return
 	}
 
 	resources, err := s.store.ListResources(principal.ID, target.kind, target.collection)
@@ -331,11 +353,6 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request, principal 
 	responses := make([]propertyResponse, 0, len(resources))
 	base := target.href()
 	for _, resource := range resources {
-		if isMultiget {
-			if _, ok := filter[resource.Name]; !ok {
-				continue
-			}
-		}
 		responses = append(responses, propertyResponse{
 			Href:         base + url.PathEscape(resource.Name),
 			ResourceType: "resource",

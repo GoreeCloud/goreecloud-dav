@@ -16,12 +16,17 @@ Current source:
 - bounds resource request bodies;
 - bounds REPORT bodies;
 - restricts user-controlled storage path segments;
-- prevents storage paths from escaping the configured data root;
+- resolves the configured filesystem root before use;
+- rejects symlinked storage path components and symlink entries before DAV reads/writes;
+- prevents accepted storage paths from escaping the configured data root;
 - writes resources atomically;
 - generates deterministic ETags;
-- supports conditional write protections;
+- supports conditional PUT protections;
+- validates multiget DAV hrefs against the authenticated principal and requested collection;
 - avoids logging DAV resource bodies;
 - emits basic browser-oriented defensive response headers.
+
+The symlink checks are defense in depth against local filesystem tampering. They are not a substitute for host permissions, application authorization, GoreeCloud Identity, or Wardveil Security.
 
 ## Production gaps
 

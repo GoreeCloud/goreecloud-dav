@@ -15,16 +15,17 @@ Implemented now:
 - Go HTTP service with loopback-only default.
 - Health, readiness, and implementation-status endpoints.
 - Development authentication provider boundary.
-- Conservative `OPTIONS` behavior that advertises only currently substantiated WebDAV compliance.
+- Conservative `OPTIONS` behavior that exposes implemented methods through `Allow` while withholding RFC 4918, CalDAV, and CardDAV compliance tokens that have not yet been earned.
 - RFC 6764 `/.well-known/caldav` and `/.well-known/carddav` redirects plus DAV principal, calendar-home, and address-book-home discovery.
 - `PROPFIND` with supported properties at Depth 0 and 1.
 - `MKCALENDAR` for calendar collections.
 - `MKCOL` for address-book collections.
 - `GET`, `HEAD`, `PUT`, and `DELETE` for supported resources.
-- SHA-256 ETags and `If-Match` / `If-None-Match` write protection.
+- SHA-256 ETags and `If-Match` / `If-None-Match` protection for PUT.
 - Baseline `calendar-query`, `calendar-multiget`, `addressbook-query`, and `addressbook-multiget` REPORT handling.
-- Atomic filesystem persistence.
-- Request-size and path-segment validation.
+- Multiget namespace/in-scope href validation and per-requested-resource 404 responses for missing objects.
+- Atomic filesystem persistence with path-segment, storage-root, and symlink-containment protections.
+- Request-size validation.
 - Automated tests and CI definition.
 
 See [FEATURES.md](FEATURES.md) for the implemented/planned split and [SPECIFICATIONS.md](SPECIFICATIONS.md) for conformance boundaries.
@@ -123,7 +124,11 @@ Status endpoints do not convert these into conformance claims.
 
 ## Standards targets
 
-The project targets applicable portions of WebDAV, CalDAV, CardDAV, iCalendar, vCard, WebDAV ACL, WebDAV Sync, and DAV service discovery. The foundation intentionally does **not** advertise the `calendar-access` or `addressbook` DAV compliance tokens because those tokens imply protocol requirements the project has not yet fully qualified. Compatibility must be demonstrated through tests and client interoperability evidence before stronger claims are made.
+The project targets applicable portions of WebDAV, CalDAV, CardDAV, iCalendar, vCard, WebDAV ACL, WebDAV Sync, and DAV service discovery.
+
+The foundation intentionally emits **no `DAV` compliance class/token today**. RFC 4918 class `1` is withheld because class-1 conformance requires all applicable RFC 4918 MUST-level behavior, while this foundation still lacks requirements such as `PROPPATCH`, `COPY`, `MOVE`, and the complete WebDAV property model. The CalDAV `calendar-access` and CardDAV `addressbook` tokens are likewise withheld until their applicable requirements and client interoperability are qualified.
+
+Compatibility must be demonstrated through tests and client interoperability evidence before stronger claims are made.
 
 ## License
 

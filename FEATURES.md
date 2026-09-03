@@ -9,7 +9,7 @@ This file distinguishes implemented source behavior from planned work.
 - Health, readiness, and implementation-status endpoints.
 - Development authentication provider boundary.
 - RFC 6764 `.well-known` CalDAV/CardDAV redirects.
-- Conservative DAV `OPTIONS` advertising only currently substantiated WebDAV compliance.
+- Conservative `OPTIONS` method discovery with RFC 4918, CalDAV, and CardDAV compliance tokens withheld until their applicable MUST-level requirements are implemented and qualified.
 - Principal/calendar/address-book discovery.
 - `PROPFIND` Depth 0/1 baseline properties.
 - Calendar collection creation with `MKCALENDAR`.
@@ -19,16 +19,20 @@ This file distinguishes implemented source behavior from planned work.
 - `PUT` with resource-size limits and baseline format validation.
 - `DELETE` for resources and empty collections.
 - SHA-256 ETags.
-- `If-Match` and `If-None-Match`.
+- `If-Match` and `If-None-Match` PUT preconditions.
 - Baseline calendar-query and calendar-multiget REPORTs.
 - Baseline addressbook-query and addressbook-multiget REPORTs.
+- Multiget namespace and in-scope `DAV:href` validation.
+- Per-requested-resource multiget responses, including explicit 404 status responses for missing resources.
 - Atomic filesystem resource writes.
-- Restricted path segments and storage-root containment.
+- Restricted path segments, storage-root containment, and fail-closed rejection of symlinked storage path components.
 - Automated tests and CI definition.
 
 ## Planned / not yet implemented
 
-- Full WebDAV property model and property mutation.
+- Full RFC 4918 WebDAV class-1 behavior and qualification.
+- `PROPPATCH` and complete live/dead WebDAV property behavior.
+- `COPY` and `MOVE` WebDAV behavior.
 - Full CalDAV/CardDAV filtering semantics.
 - WebDAV ACL.
 - RFC 6578 sync tokens and incremental change journal.

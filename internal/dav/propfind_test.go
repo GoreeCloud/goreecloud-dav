@@ -26,6 +26,9 @@ func seedPropfindCalendarResource(t *testing.T, baseURL string, client *http.Cli
 	}
 	etag := resp.Header.Get("ETag")
 	resp.Body.Close()
+	if etag == "" {
+		t.Fatal("PUT did not return an ETag for the seeded PROPFIND resource")
+	}
 	return etag
 }
 
@@ -83,9 +86,19 @@ func TestPropfindExplicitPropertiesSeparateMissingPropstat(t *testing.T) {
 	if resp.StatusCode != 207 {
 		t.Fatalf("explicit PROPFIND status=%d body=%s", resp.StatusCode, body)
 	}
+
 	etags := xmlElementValues(t, body, nsDAV, "getetag")
-	if len(etags) != 1 || etags[0] != etag || !strings.Contains(text, "unknown") || !strings.Contains(text, "HTTP/1.1 404 Not Found") {
-		t.Fatalf("explicit PROPFIND did not separate supported/missing properties: %s", body)
+	if len(etags) != 1 {
+		t.Fatalf("explicit PROPFIND getetag count=%d values=%q body=%s", len(etags), etags, body)
+	}
+	if etags[0] != etag {
+		t.Fatalf("explicit PROPFIND ETag mismatch: response=%q PUT=%q body=%s", etags[0], etag, body)
+	}
+	if !strings.Contains(text, "unknown") {
+		t.Fatalf("explicit PROPFIND omitted requested unknown property: %s", body)
+	}
+	if !strings.Contains(text, "HTTP/1.1 404 Not Found") {
+		t.Fatalf("explicit PROPFIND omitted 404 propstat for unsupported property: %s", body)
 	}
 }
 

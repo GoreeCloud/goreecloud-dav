@@ -11,13 +11,25 @@ import (
 )
 
 var (
-	errUnsupportedReportFilter = errors.New("unsupported report filter")
-	errUnsupportedReportDepth  = errors.New("unsupported report depth")
+	errUnsupportedReportFilter     = errors.New("unsupported report filter")
+	errUnsupportedReportDepth      = errors.New("unsupported report depth")
+	errUnsupportedReportProjection = errors.New("unsupported report projection")
+)
+
+type reportPropertyMode uint8
+
+const (
+	reportPropertiesNone reportPropertyMode = iota
+	reportPropertiesAll
+	reportPropertyNames
+	reportPropertiesExplicit
 )
 
 type reportRequest struct {
 	Name              string
 	Hrefs             []string
+	PropertyMode      reportPropertyMode
+	Properties        []xml.Name
 	CalendarFilter    *calendarComponentFilter
 	AddressBookFilter *addressBookFilter
 }
@@ -45,7 +57,7 @@ func parseReportRequest(data []byte) (reportRequest, error) {
 		return reportRequest{}, err
 	}
 
-	req := reportRequest{Name: root.Name.Local}
+	req := reportRequest{Name: root.Name.Local, PropertyMode: reportPropertiesNone}
 	var expectedNamespace string
 	switch root.Name.Local {
 	case "calendar-query", "calendar-multiget":
@@ -59,15 +71,28 @@ func parseReportRequest(data []byte) (reportRequest, error) {
 		return reportRequest{}, fmt.Errorf("report has unexpected namespace %q", root.Name.Space)
 	}
 
+	propertySelectionSet := false
 	for _, child := range root.Children {
 		switch {
 		case child.Name.Space == nsDAV && child.Name.Local == "href":
-			req.Hrefs = append(req.Hrefs, strings.TrimSpace(child.Text))
+			if !strings.HasSuffix(root.Name.Local, "-multiget") {
+				return reportRequest{}, fmt.Errorf("DAV:href is only valid in a multiget report")
+			}
+			href := strings.TrimSpace(child.Text)
+			if href == "" || len(child.Children) != 0 {
+				return reportRequest{}, fmt.Errorf("invalid DAV:href")
+			}
+			req.Hrefs = append(req.Hrefs, href)
+
 		case child.Name.Space == nsDAV && (child.Name.Local == "prop" || child.Name.Local == "allprop" || child.Name.Local == "propname"):
-			// Property selection is accepted here and remains a separate
-			// foundation concern. The current report response still returns the
-			// supported baseline report properties until selective REPORT
-			// property projection is implemented.
+			if propertySelectionSet {
+				return reportRequest{}, fmt.Errorf("report contains multiple DAV property selections")
+			}
+			propertySelectionSet = true
+			if err := parseReportPropertySelection(child, &req); err != nil {
+				return reportRequest{}, err
+			}
+
 		case root.Name.Local == "calendar-query" && child.Name.Space == nsCalDAV && child.Name.Local == "filter":
 			if req.CalendarFilter != nil {
 				return reportRequest{}, fmt.Errorf("calendar-query contains multiple filters")
@@ -77,6 +102,7 @@ func parseReportRequest(data []byte) (reportRequest, error) {
 				return reportRequest{}, err
 			}
 			req.CalendarFilter = &filter
+
 		case root.Name.Local == "addressbook-query" && child.Name.Space == nsCardDAV && child.Name.Local == "filter":
 			if req.AddressBookFilter != nil {
 				return reportRequest{}, fmt.Errorf("addressbook-query contains multiple filters")
@@ -86,6 +112,7 @@ func parseReportRequest(data []byte) (reportRequest, error) {
 				return reportRequest{}, err
 			}
 			req.AddressBookFilter = &filter
+
 		default:
 			return reportRequest{}, fmt.Errorf("unsupported report child %s:%s", child.Name.Space, child.Name.Local)
 		}
@@ -107,6 +134,46 @@ func parseReportRequest(data []byte) (reportRequest, error) {
 	}
 
 	return req, nil
+}
+
+func parseReportPropertySelection(node *reportXMLNode, req *reportRequest) error {
+	if strings.TrimSpace(node.Text) != "" {
+		return fmt.Errorf("DAV property selection contains unexpected text")
+	}
+
+	switch node.Name.Local {
+	case "allprop":
+		if len(node.Children) != 0 {
+			return fmt.Errorf("DAV:allprop must be empty")
+		}
+		req.PropertyMode = reportPropertiesAll
+	case "propname":
+		if len(node.Children) != 0 {
+			return fmt.Errorf("DAV:propname must be empty")
+		}
+		req.PropertyMode = reportPropertyNames
+	case "prop":
+		req.PropertyMode = reportPropertiesExplicit
+		for _, child := range node.Children {
+			if isReportDataProperty(child.Name) {
+				if strings.TrimSpace(child.Text) != "" || len(child.Children) != 0 || len(child.Attrs) != 0 {
+					return fmt.Errorf("%w: partial calendar/address data projection is not implemented", errUnsupportedReportProjection)
+				}
+			} else if strings.TrimSpace(child.Text) != "" || len(child.Children) != 0 {
+				return fmt.Errorf("requested DAV property must not include a value")
+			}
+			req.Properties = append(req.Properties, child.Name)
+		}
+		req.Properties = deduplicatePropertyNames(req.Properties)
+	default:
+		return fmt.Errorf("unsupported DAV property selection %q", node.Name.Local)
+	}
+	return nil
+}
+
+func isReportDataProperty(name xml.Name) bool {
+	return name == (xml.Name{Space: nsCalDAV, Local: "calendar-data"}) ||
+		name == (xml.Name{Space: nsCardDAV, Local: "address-data"})
 }
 
 func parseReportXML(data []byte) (*reportXMLNode, error) {

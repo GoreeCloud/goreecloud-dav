@@ -61,7 +61,7 @@ func TestDAVCalendarLifecycle(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//GoreeCloud//DAV Test//EN\r\nEND:VCALENDAR\r\n"
+	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//GoreeCloud//DAV Test//EN\r\nBEGIN:VEVENT\r\nUID:event-1\r\nDTSTAMP:20260903T120000Z\r\nDTSTART:20260904T120000Z\r\nSUMMARY:Test Event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
 	resp = request(t, client, http.MethodPut, ts.URL+"/dav/calendars/alice/personal/event.ics", ics, nil)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("PUT status=%d", resp.StatusCode)
@@ -92,8 +92,8 @@ func TestDAVCalendarLifecycle(t *testing.T) {
 		t.Fatalf("PROPFIND status=%d body=%s", resp.StatusCode, propBody)
 	}
 
-	report := `<?xml version="1.0"?><calendar-query xmlns="urn:ietf:params:xml:ns:caldav"/>`
-	resp = request(t, client, "REPORT", ts.URL+"/dav/calendars/alice/personal/", report, nil)
+	report := `<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"/></C:comp-filter></C:filter></C:calendar-query>`
+	resp = request(t, client, "REPORT", ts.URL+"/dav/calendars/alice/personal/", report, map[string]string{"Depth": "1"})
 	reportBody, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode != 207 || !strings.Contains(string(reportBody), "VCALENDAR") {

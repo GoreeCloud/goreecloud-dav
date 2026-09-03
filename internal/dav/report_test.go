@@ -59,6 +59,24 @@ func TestCalendarMultigetAcceptsInScopeDAVHref(t *testing.T) {
 	}
 }
 
+func TestCalendarMultigetDeduplicatesRepeatedDAVHref(t *testing.T) {
+	ts := newTestServer(t)
+	client := ts.Client()
+	seedCalendarResource(t, ts.URL, client)
+
+	href := "/dav/calendars/alice/personal/event.ics"
+	report := `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:href>` + href + `</D:href><D:href>` + href + `</D:href></C:calendar-multiget>`
+	resp := request(t, client, "REPORT", ts.URL+"/dav/calendars/alice/personal/", report, nil)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 207 {
+		t.Fatalf("duplicate multiget status=%d body=%s", resp.StatusCode, body)
+	}
+	if got := strings.Count(string(body), href); got != 1 {
+		t.Fatalf("duplicate href produced %d multistatus href entries: %s", got, body)
+	}
+}
+
 func TestCalendarMultigetReturnsPerHrefNotFound(t *testing.T) {
 	ts := newTestServer(t)
 	client := ts.Client()

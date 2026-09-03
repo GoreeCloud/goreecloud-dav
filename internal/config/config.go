@@ -42,6 +42,9 @@ func Load() (Config, error) {
 	if (cfg.Username == "") != (cfg.Password == "") {
 		return Config{}, fmt.Errorf("GOREECLOUD_DAV_USERNAME and GOREECLOUD_DAV_PASSWORD must be configured together")
 	}
+	if cfg.Username != "" && !validDevelopmentPrincipalID(cfg.Username) {
+		return Config{}, fmt.Errorf("GOREECLOUD_DAV_USERNAME must be a canonical development principal ID using only letters, digits, '-' or '_'")
+	}
 
 	if !isLoopbackListen(cfg.Listen) && cfg.Username == "" {
 		return Config{}, fmt.Errorf("refusing non-loopback listener without development credentials")
@@ -67,4 +70,21 @@ func isLoopbackListen(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+func validDevelopmentPrincipalID(value string) bool {
+	if value == "" || value == "." || value == ".." || strings.HasPrefix(value, ".") {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }

@@ -1,0 +1,151 @@
+schema_version: '0.2'
+
+component:
+  type: service
+  id: goreecloud-dav
+  product_name: GoreeCloud DAV
+  repository: GoreeCloud/goreecloud-dav
+
+lifecycle: development
+version: unversioned-development
+
+supported_platforms:
+  - linux
+
+api:
+  versions:
+    - v1
+  endpoints:
+    - name: health
+      url: /healthz
+      purpose: Report process-level service health for the current development foundation.
+    - name: readiness
+      url: /readyz
+      purpose: Report readiness for the current development foundation.
+    - name: implementation-status
+      url: /api/v1/status
+      purpose: Report lifecycle, native implementation state, protocol foundation state, and conservative platform-integration status.
+
+platform_systems:
+  manager:
+    result: applicable-migration-required
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+      - internal/dav/server.go
+    notes: Health, readiness, and implementation-status interfaces exist for Manager-oriented operational visibility, but accepted GoreeCloud Manager discovery, lifecycle control, configuration, and administration integration is not established.
+  privacy_shield:
+    result: applicable-migration-required
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+      - SECURITY.md
+    notes: DAV processes calendar, contact, task, journal, account, sharing, and related metadata, but current source does not establish accepted Privacy Shield collection, access, sharing, retention, export, deletion, or transfer enforcement.
+  wardveil_security:
+    result: applicable-migration-required
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+      - SECURITY.md
+    notes: The native foundation includes bounded bodies, safe path handling, conditional-write protection, restricted exposure, and explicit authentication boundaries, but accepted Wardveil Security integration and runtime security evidence remain incomplete.
+  everkeep:
+    result: applicable-migration-required
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: The replaceable storage boundary and standards formats support future recovery and portability work, but DAV synchronization is not backup and no accepted Everkeep protection, restore, or continuity integration is established.
+  glaze_ui:
+    result: not-applicable-justified
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+      - BRANDING.md
+    notes: GoreeCloud DAV is currently a headless network interoperability service with no user-facing or administrative UI. Glaze UI becomes applicable if such a surface is introduced.
+  mesh:
+    result: applicable-migration-required
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+      - internal/dav/server.go
+    notes: GoreeCloud Mesh is the intended first-party coordination path for service discovery, capabilities, events, and future Calendar, Contacts, and Tasks integration, but the current filesystem-backed foundation does not claim Mesh participation.
+    capabilities: []
+    dependencies: []
+    published_events: []
+    consumed_events: []
+  identity:
+    result: applicable-migration-required
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+      - SECURITY.md
+      - internal/auth/auth.go
+    notes: The current local/basic authentication provider is explicitly development-only and transitional. Production authentication and authorization through GoreeCloud Identity remain unimplemented and unaccepted.
+
+health:
+  health_endpoint: /healthz
+  readiness_endpoint: /readyz
+
+continuity:
+  backup:
+    required: true
+    requirements:
+      - Protect the currently configured DAV persistent data store and required non-secret service configuration independently of synchronization.
+      - Preserve calendar and contact resource bytes, collection structure, and metadata required to reconstruct the supported development-state service.
+  restore:
+    required: true
+    requirements:
+      - Validate restoration into an isolated clean target before any production dependence on GoreeCloud DAV.
+      - Verify restored collections, resources, entity tags, conditional-write behavior, principal isolation, and required service health after recovery.
+  export:
+    required: true
+    requirements:
+      - Preserve standards-oriented iCalendar and vCard portability for supported resources without representing current foundation behavior as complete CalDAV or CardDAV conformance.
+  portability:
+    required: true
+    requirements:
+      - Keep storage behind a replaceable interface so the development filesystem layout does not become a permanent application data architecture.
+      - Preserve the ability to migrate DAV interoperability onto approved GoreeCloud Calendar, Contacts, Tasks, and Mesh-backed service contracts as they mature.
+
+external_dependencies: []
+
+compatibility:
+  platform_contract: '0.2'
+  glaze_ui_required: null
+  requires:
+    - goreecloud-platform-contract==0.2
+  provides:
+    - goreecloud-dav-status-v1
+
+evidence:
+  acceptance_tests: []
+  release: []
+
+conformance:
+  status: nonconformant
+  validated_at: null
+  evidence:
+    - README.md
+    - SPECIFICATIONS.md
+    - FEATURES.md
+    - SECURITY.md
+    - docs/ARCHITECTURE.md
+    - internal/dav/server.go
+    - internal/auth/auth.go
+  blockers:
+    - GoreeCloud DAV remains an unversioned Active Development foundation and has no Stable or production-approved release.
+    - Full RFC 4918 class-1 WebDAV behavior is incomplete, including PROPPATCH, COPY, MOVE, and complete live/dead property semantics.
+    - Complete CalDAV and CardDAV conformance, WebDAV ACL, RFC 6578 synchronization tokens, complete report filtering, scheduling extensions, and broad client interoperability qualification remain incomplete.
+    - Production GoreeCloud Identity authentication and authorization integration is incomplete.
+    - Privacy Shield integration and acceptance are incomplete.
+    - Wardveil Security integration and acceptance are incomplete.
+    - Everkeep backup, restore, and continuity integration and recovery evidence are incomplete.
+    - GoreeCloud Manager integration and acceptance beyond development health/readiness/status surfaces are incomplete.
+    - GoreeCloud Mesh discovery, capability, event, and first-party service integration are incomplete.
+    - Production TLS, reverse-proxy publication, external exposure, packaging, deployment, performance, and exact-release acceptance remain incomplete.

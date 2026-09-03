@@ -50,7 +50,7 @@ func TestCalendarMultigetAcceptsInScopeDAVHref(t *testing.T) {
 	client := ts.Client()
 	seedCalendarResource(t, ts.URL, client)
 
-	report := `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:href>/dav/calendars/alice/personal/event.ics</D:href></C:calendar-multiget>`
+	report := `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:prop><C:calendar-data/></D:prop><D:href>/dav/calendars/alice/personal/event.ics</D:href></C:calendar-multiget>`
 	resp := request(t, client, "REPORT", ts.URL+"/dav/calendars/alice/personal/", report, nil)
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
@@ -65,7 +65,7 @@ func TestCalendarMultigetAcceptsSameAuthorityAbsoluteDAVHref(t *testing.T) {
 	seedCalendarResource(t, ts.URL, client)
 
 	href := ts.URL + "/dav/calendars/alice/personal/event.ics"
-	report := `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:href>` + href + `</D:href></C:calendar-multiget>`
+	report := `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:prop><C:calendar-data/></D:prop><D:href>` + href + `</D:href></C:calendar-multiget>`
 	resp := request(t, client, "REPORT", ts.URL+"/dav/calendars/alice/personal/", report, nil)
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
